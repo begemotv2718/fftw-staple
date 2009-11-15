@@ -1,0 +1,11 @@
+SHORT DESCRIPTION
+
+fftw-staple is a simple and relatively fast program to join two images which
+has overlap region. The approximate overlap region is specified on command
+line,then the program find exact amount of the shift of one image relative to
+the other and blend them together. Currently the overlap region should be in
+exactly the same orientation on the both images, which makes this program only
+of limited use to stitch panoramas and scans of the pages that do not fully fit
+on the scanner bed (because skewing of one image w.r.t the other is very
+likely). The support for the second task, however, is planned in the nearest
+future.  
