@@ -308,13 +308,15 @@ int main(int argc, const char **argv){
    } 
 
   fftw_image_region(size_x,size_y,off_x_1,off_y_1,image1);
-  save_image_region(size_x,size_y,off_x_1,off_y_1,image1,"test1.png");
+  if(debug_fft)
+    save_image_region(size_x,size_y,off_x_1,off_y_1,image1,"/tmp/test1.png");
   memcpy(storage_buffer,fftw_output,sizeof(double complex)*size_x*(size_y/2+1));
 
   //fftw_execute(reverse_plan);
 
   fftw_image_region(size_x,size_y,off_x_2,off_y_2,image2);
-  save_image_region(size_x,size_y,off_x_2,off_y_2,image2,"test2.png");
+  if(debug_fft)
+    save_image_region(size_x,size_y,off_x_2,off_y_2,image2,"/tmp/test2.png");
   for(i=0;i<size_x*(size_y/2+1);i++){
     /*See http://en.wikipedia.org/wiki/Phase_correlation */
     double complex tmp=conj(fftw_output[i])*storage_buffer[i];
@@ -337,23 +339,29 @@ int main(int argc, const char **argv){
   if(shift_y>size_y/2)
     shift_y=-(size_y-shift_y);
 
-  printf("Shift x: %d Shift y: %d\n",shift_x,shift_y);
+  if(debug_fft)
+    printf("Shift x: %d Shift y: %d\n",shift_x,shift_y);
   shift_y+=(off_y_1-off_y_2);
   shift_x+=(off_x_1-off_x_2);
+  if(debug_fft)
+    printf("Shift x: %d Shift y: %d\n",shift_x,shift_y);
 
-  printf("Shift x: %d Shift y: %d\n",shift_x,shift_y);
   rectangle rect_im1, rect_im2, bbox;
   make_rect(0,0,width1,height1,&rect_im1);
   make_rect(0,0,width2,height2,&rect_im2);
   shift_rect(shift_x,shift_y,&rect_im2);
-  printf("Before transform:\n");
-  printf("Image 1: "); print_rectangle(&rect_im1); printf("\n");
-  printf("Image 2: "); print_rectangle(&rect_im2); printf("\n");
+  if(debug_fft){
+    printf("Before transform:\n");
+    printf("Image 1: "); print_rectangle(&rect_im1); printf("\n");
+    printf("Image 2: "); print_rectangle(&rect_im2); printf("\n");
+  }
   adjust_rectangle(&rect_im1,&rect_im2,&bbox);
-  printf("After transform:\n");
-  printf("Image 1: "); print_rectangle(&rect_im1); printf("\n");
-  printf("Image 2: "); print_rectangle(&rect_im2); printf("\n");
-  printf("BBox: "); print_rectangle(&bbox); printf("\n");
+  if(debug_fft){
+    printf("After transform:\n");
+    printf("Image 1: "); print_rectangle(&rect_im1); printf("\n");
+    printf("Image 2: "); print_rectangle(&rect_im2); printf("\n");
+    printf("BBox: "); print_rectangle(&bbox); printf("\n");
+  }
 
   
   Imlib_Image result_image;
