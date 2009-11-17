@@ -158,6 +158,11 @@ void save_image_region(int size_x, int size_y, int offset_x, int offset_y, Imlib
   fftw_free(outbuffer);
 }
 
+
+void rotate_fftw(complex double *fftw_output, int size_x, int size_y, double phi){
+
+}
+
 /*Functions for command-line arguments */
 const char *progname;
 void usage(){
@@ -312,28 +317,31 @@ int main(int argc, const char **argv){
     save_image_region(size_x,size_y,off_x_1,off_y_1,image1,"/tmp/test1.png");
   memcpy(storage_buffer,fftw_output,sizeof(double complex)*size_x*(size_y/2+1));
 
+  fftw_image_region(size_x,size_y,off_x_2,off_y_2,image2);
+  if(debug_fft)
+    save_image_region(size_x,size_y,off_x_2,off_y_2,image2,"/tmp/test2.png");
+
 
   double maxarray[3];
   double phi[3]={-5*pi/180,0,5*pi/180};
   /*Attempt 3 rotations, calculate the ffts, find the best two results*/
   for(rotate=0; rotate<3; rotate++){
-  fftw_image_region(size_x,size_y,off_x_2,off_y_2,image2);
-  if(debug_fft)
-    save_image_region(size_x,size_y,off_x_2,off_y_2,image2,"/tmp/test2.png");
-  for(i=0;i<size_x*(size_y/2+1);i++){
-    /*See http://en.wikipedia.org/wiki/Phase_correlation */
-    double complex tmp=conj(fftw_output[i])*storage_buffer[i];
-    fftw_output[i]=tmp/cabs(tmp);
-  }
-  fftw_execute(reverse_plan);
+    rotate_fftw(fftw_output,size_x,size_y,phi[rotate]);
+    for(i=0;i<size_x*(size_y/2+1);i++){
+      /*See http://en.wikipedia.org/wiki/Phase_correlation */
+      double complex tmp=conj(fftw_output[i])*storage_buffer[i];
+      fftw_output[i]=tmp/cabs(tmp);
+    }
+    fftw_execute(reverse_plan);
 
-
-  /*Find max of fft transformed correlation -- will indicate shift */ 
-  double max=fftw_reverse_result[0];
-  int imax=0;
-  for(i=0; i<size_x*size_y;i++)
-    if(fabs(fftw_reverse_result[i])>max){ imax=i; max=fabs(fftw_reverse_result[i]); }
+    /*Find max of fft transformed correlation -- will indicate shift */ 
+    double max=fftw_reverse_result[0];
+    int imax=0;
+    for(i=0; i<size_x*size_y;i++)
+      if(fabs(fftw_reverse_result[i])>max){ imax=i; max=fabs(fftw_reverse_result[i]); }
+    maxarray[rotate]=max;
   }
+
   int shift_x, shift_y;
   shift_x=imax%size_x;
   shift_y=(imax-shift_x)/size_x;
