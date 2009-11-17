@@ -312,8 +312,11 @@ int main(int argc, const char **argv){
     save_image_region(size_x,size_y,off_x_1,off_y_1,image1,"/tmp/test1.png");
   memcpy(storage_buffer,fftw_output,sizeof(double complex)*size_x*(size_y/2+1));
 
-  //fftw_execute(reverse_plan);
 
+  double maxarray[3];
+  double phi[3]={-5*pi/180,0,5*pi/180};
+  /*Attempt 3 rotations, calculate the ffts, find the best two results*/
+  for(rotate=0; rotate<3; rotate++){
   fftw_image_region(size_x,size_y,off_x_2,off_y_2,image2);
   if(debug_fft)
     save_image_region(size_x,size_y,off_x_2,off_y_2,image2,"/tmp/test2.png");
@@ -330,7 +333,7 @@ int main(int argc, const char **argv){
   int imax=0;
   for(i=0; i<size_x*size_y;i++)
     if(fabs(fftw_reverse_result[i])>max){ imax=i; max=fabs(fftw_reverse_result[i]); }
-  
+  }
   int shift_x, shift_y;
   shift_x=imax%size_x;
   shift_y=(imax-shift_x)/size_x;
