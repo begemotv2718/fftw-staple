@@ -24,6 +24,13 @@ void make_rect(int x1, int y1, int x2, int y2, rectangle *rect){
   rect->y2=y2;
 }
 
+void inline copy_rect(rectangle *dest, rectangle *src){
+  dest->x1=src->x1;
+  dest->x2=src->x2;
+  dest->y1=src->y1;
+  dest->y2=src->y2;
+}
+
 void bounding_rectangle(rectangle *a, rectangle *b, rectangle *result){
   result->x1=MIN(a->x1,b->x1);
   result->x2=MAX(a->x2,b->x2);
@@ -128,6 +135,69 @@ void fftw_image_region(int size_x, int size_y, int offset_x, int offset_y, Imlib
 
   fftw_execute(plan);
 }  
+
+typedef struct{
+  double phi;/*Angle of rotation*/
+  Imlib_Image image; /*Rotated image*/
+  rectangle staple; /*image region used for fft*/
+  double max; /*Peak in the convolution of image1 with phi rotated image above*/
+  int imax;
+} rot_result_t;
+
+
+/*staple should be size_x x size_y */
+void fftw_rotated_image(double phi, rectangle *staple, char staple_type, double complex *to_convolve,
+                        Imlib_Image image, rot_result_t *res){
+ imlib_context_set_image(image);
+ res->image=imlib_create_rotated_image();
+ res->phi=phi;
+ int shift;
+ switch(staple_type){
+   case 'r': 
+     shift = (int)fabs((double)imlib_image_get_height()*sin(phi));
+     shift_rect(-shift,0,staple);
+     break;
+   case 'l':
+     shift = (int)fabs((double)imlib_image_get_height()*sin(phi));
+     shift_rect(shift,0,staple);
+     break;
+   case 't':
+     shift = (int)fabs((double)imlib_image_get_width()*sin(phi));
+     shift_rect(0,-shift,staple);
+     break;
+   case 'b':
+     shift = (int)fabs((double)imlib_image_get_width()*sin(phi));
+     shift_rect(0,shift,staple);
+     break;
+   default:
+     die("Bad staple type");
+ }
+ int i;
+ int size_x = staple->x2-staple->x1;
+ int size_y = staple->y2-staple->y1;
+ int off_x = staple->x1; 
+ int off_y = staple->y1;
+
+ fftw_image_region(size_x,size_y,off_x,off_y, res->image);
+
+ for(i=0;i<size_x*(size_y/2+1);i++){
+   /*See http://en.wikipedia.org/wiki/Phase_correlation */
+   double complex tmp=conj(fftw_output[i])*to_convolve[i];
+   fftw_output[i]=tmp/cabs(tmp);
+ }
+ fftw_execute(reverse_plan);
+
+ /*Find max of fft transformed correlation -- will indicate shift */ 
+ double max=fftw_reverse_result[0];
+ int imax=0;
+ for(i=0; i<size_x*size_y;i++)
+   if(fabs(fftw_reverse_result[i])>max){ imax=i; max=fabs(fftw_reverse_result[i]); }
+ res->max = max;
+ res->imax = imax;
+ copy_rect(&res->staple,staple);
+
+}                          
+
    
 void save_image_region(int size_x, int size_y, int offset_x, int offset_y, Imlib_Image image,const char* filename){
   /*Debug function. */
@@ -159,9 +229,6 @@ void save_image_region(int size_x, int size_y, int offset_x, int offset_y, Imlib
 }
 
 
-void rotate_fftw(complex double *fftw_output, int size_x, int size_y, double phi){
-
-}
 
 /*Functions for command-line arguments */
 const char *progname;
@@ -326,20 +393,6 @@ int main(int argc, const char **argv){
   double phi[3]={-5*pi/180,0,5*pi/180};
   /*Attempt 3 rotations, calculate the ffts, find the best two results*/
   for(rotate=0; rotate<3; rotate++){
-    rotate_fftw(fftw_output,size_x,size_y,phi[rotate]);
-    for(i=0;i<size_x*(size_y/2+1);i++){
-      /*See http://en.wikipedia.org/wiki/Phase_correlation */
-      double complex tmp=conj(fftw_output[i])*storage_buffer[i];
-      fftw_output[i]=tmp/cabs(tmp);
-    }
-    fftw_execute(reverse_plan);
-
-    /*Find max of fft transformed correlation -- will indicate shift */ 
-    double max=fftw_reverse_result[0];
-    int imax=0;
-    for(i=0; i<size_x*size_y;i++)
-      if(fabs(fftw_reverse_result[i])>max){ imax=i; max=fabs(fftw_reverse_result[i]); }
-    maxarray[rotate]=max;
   }
 
   int shift_x, shift_y;
