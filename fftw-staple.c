@@ -149,32 +149,46 @@ typedef struct{
 void fftw_rotated_image(double phi, rectangle *staple, char staple_type, double complex *to_convolve,
                         Imlib_Image image, rot_result_t *res){
  imlib_context_set_image(image);
- res->image=imlib_create_rotated_image();
+ int init_width=imlib_image_get_width();
+ int init_height=imlib_image_get_height();
+ //Avoid calling rotate if phi = 0
+ if(fabs(phi)>1e-6){
+   res->image=imlib_create_rotated_image(phi);
+ }else{
+   res->image=imlib_clone_image();
+ }
  res->phi=phi;
- int shift;
+ imlib_context_set_image(res->image);
+ int end_width=imlib_image_get_width();
+ int end_height=imlib_image_get_height();
+ int shift_x, shift_y;
  switch(staple_type){
    case 'r': 
-     shift = (int)fabs((double)imlib_image_get_height()*sin(phi));
-     shift_rect(-shift,0,staple);
+     shift_x =(end_width-init_width)/2+(int)fabs((double)init_height*sin(phi)/2.0);
+     shift_y =(end_height -init_height)/2;
+     shift_rect(-shift_x,shift_y,staple);
      break;
    case 'l':
-     shift = (int)fabs((double)imlib_image_get_height()*sin(phi));
-     shift_rect(shift,0,staple);
+     shift_x =(end_width-init_width)/2+(int)fabs((double)init_height*sin(phi)/2.0);
+     shift_y =(end_height -init_height)/2;
+     shift_rect(shift_x,shift_y,staple);
      break;
    case 't':
-     shift = (int)fabs((double)imlib_image_get_width()*sin(phi));
-     shift_rect(0,-shift,staple);
+     shift_x =(end_width-init_width)/2;
+     shift_y =(end_height -init_height)/2+(int)fabs((double)init_width*sin(phi)/2.0);
+     shift_rect(shift_x,shift_y,staple);
      break;
    case 'b':
-     shift = (int)fabs((double)imlib_image_get_width()*sin(phi));
-     shift_rect(0,shift,staple);
+     shift_x =(end_width-init_width)/2;
+     shift_y =(end_height -init_height)/2+(int)fabs((double)init_width*sin(phi)/2.0);
+     shift_rect(shift_x,-shift_y,staple);
      break;
    default:
      die("Bad staple type");
  }
  int i;
- int size_x = staple->x2-staple->x1;
- int size_y = staple->y2-staple->y1;
+ int size_x = staple->x2 - staple->x1;
+ int size_y = staple->y2 - staple->y1;
  int off_x = staple->x1; 
  int off_y = staple->y1;
 
@@ -288,6 +302,7 @@ int main(int argc, const char **argv){
   int i;
   progname=argv[0];
   int debug_fft=0;
+  int do_rotation=0;
   Imlib_Image image1,image2;
   clock_t time_for_malloc, time_for_plan, time_for_load, time_for_array_access, time_for_fft;
   clock_t start_clock, end_clock;
@@ -309,6 +324,8 @@ int main(int argc, const char **argv){
         case 'v' :
           debug_fft=1;
           break;
+        case 'r' :
+          do_rotation = 1;  
         default:  
           usage();
       }
@@ -348,30 +365,35 @@ int main(int argc, const char **argv){
 
 
   int off_x_1,off_y_1,off_x_2,off_y_2;
+  char inverse_staple='t';
   switch(staple){
     case 'b' :
      off_x_1=(width1-size_x)/2;
      off_y_1=height1-size_y;
      off_x_2=(width2-size_x)/2;
      off_y_2=0;
+     inverse_staple='t';
      break;
     case 't' :
      off_x_1=(width1-size_x)/2;
      off_y_1=0;
      off_x_2=(width2-size_x)/2;
      off_y_2=height2-size_y;
+     inverse_staple = 'b';
      break;
     case 'r' :
      off_x_1=width1-size_x;
      off_y_1=(height1-size_y)/2;
      off_x_2=0;
      off_y_2=(height2-size_y)/2;
+     inverse_staple = 'l';
      break;
     case 'l' :
      off_x_1=0;
      off_y_1=(height1-size_y)/2;
      off_x_2=width2-size_x;
-     off_y_2=(height2-size_y)/2; 
+     off_y_2=(height2-size_y)/2;
+     invese_staple = 'r'; 
     default:
      off_x_1=0;
      off_x_2=0;
@@ -384,17 +406,19 @@ int main(int argc, const char **argv){
     save_image_region(size_x,size_y,off_x_1,off_y_1,image1,"/tmp/test1.png");
   memcpy(storage_buffer,fftw_output,sizeof(double complex)*size_x*(size_y/2+1));
 
-  fftw_image_region(size_x,size_y,off_x_2,off_y_2,image2);
-  if(debug_fft)
-    save_image_region(size_x,size_y,off_x_2,off_y_2,image2,"/tmp/test2.png");
+  rot_result_t rot_array[11];
+  for(i=0; i<11; i++){
+    rectangle mystaple;
+    make_rect(off_x_2,off_y_2,off_x_2+size_x,off_y_2+size_y,&mystaple);
+    fftw_rotated_image(-0.001+0.0002*i, &mystaple,'t', storage_buffer,image2, &rot_array[i]);
+    printf("phi: %f max: %f\n",rot_array[i].phi,rot_array[i].max);
+    char tmpfilename[60];
+    snprintf(tmpfilename,60,"/tmp/rotation2_%f.png",rot_array[i].phi); 
+    save_image_region(size_x,size_y,rot_array[i].staple.x1,rot_array[i].staple.y1,rot_array[i].image,tmpfilename);
+  } 
 
-
-  double maxarray[3];
-  double phi[3]={-5*pi/180,0,5*pi/180};
-  /*Attempt 3 rotations, calculate the ffts, find the best two results*/
-  for(rotate=0; rotate<3; rotate++){
-  }
-
+  exit(0);
+  int imax=rot_array[5].imax;
   int shift_x, shift_y;
   shift_x=imax%size_x;
   shift_y=(imax-shift_x)/size_x;
