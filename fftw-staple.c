@@ -214,9 +214,9 @@ void fftw_rotated_image(double phi, rectangle *staple, char staple_type, double 
 
 void exchange(rot_result_t *a, rot_result_t *b){
   rot_result_t tmp;
-  memmove(&tmp,a,sizeof(a));
-  memmove(a,b,sizeof(a));
-  memmove(b,&tmp,sizeof(a));
+  memcpy(&tmp,a,sizeof(rot_result_t));
+  memcpy(a,b,sizeof(rot_result_t));
+  memcpy(b,&tmp,sizeof(rot_result_t));
 }
     
 
@@ -450,14 +450,16 @@ int main(int argc, const char **argv){
                         image2, /*Source image*/
                         &rot_array[i] /*Result*/
                       );
+    printf("phi: %f max %f\n\n",rot_array[i].phi,rot_array[i].max);
   }
 
   double delta_phi=phi; //Angle between adjacent rotations
   while(delta_phi>1.0/(double)width2){
     if(debug_fft){
       for(i=0;i<3;i++){
-        printf("Image %d: phi=%f max=%d\n",i+1,rot_array[i].phi,rot_array[i].max);
+        printf("Image %d: phi=%f max=%f\n",i+1,rot_array[i].phi,rot_array[i].max);
       }
+      printf("\n");
     }   
     if(!order_rotations(rot_array)){
       warn("Middle element has a lowest match either rotation angle too\
