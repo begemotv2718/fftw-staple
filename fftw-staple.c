@@ -212,7 +212,34 @@ void fftw_rotated_image(double phi, rectangle *staple, char staple_type, double 
 
 }                          
 
-   
+void exchange(rot_result_t *a, rot_result_t *b){
+  rot_result_t tmp;
+  memmove(&tmp,a,sizeof(a));
+  memmove(a,b,sizeof(a));
+  memmove(b,&tmp,sizeof(a));
+}
+    
+
+int order_rotations(rot_result_t *array){
+  if(array[1].max < array[2].max && 
+     array[1].max < array[0].max
+    ) return(0);
+  if(array[0].max < array[1].max &&
+     array[0].max < array[2].max)
+  {
+    exchange(&array[0],&array[1]);
+    return(1);
+  }
+  if(array[2].max < array[1].max &&
+     array[2].max < array[0].max){
+    exchange(&array[2],&array[1]);
+    return(1);
+  }
+  /*Assertion1: array[2]->phi > array[0]->phi before and after the procedure*/
+  /*Assertion2: array[1]->max is the lowest*/
+}    
+
+
 void save_image_region(int size_x, int size_y, int offset_x, int offset_y, Imlib_Image image,const char* filename){
   /*Debug function. */
   /* Stores region of image with given sizes and offsets into filename */
@@ -258,6 +285,10 @@ int die(char *message)
   exit(-1);
 }
 
+int warn(char *message){
+  fprintf(stderr, "%s\n",message);
+}
+
 int parse_staple( char **rest, char *result){
   char *geometry;
   geometry=*rest;
@@ -301,7 +332,7 @@ int parse_geometry(char *geometry, int *size_x, int *size_y, char *staple){
 int main(int argc, const char **argv){
   int i;
   progname=argv[0];
-  int debug_fft=0;
+  int debug_fft=1;
   int do_rotation=0;
   Imlib_Image image1,image2;
   clock_t time_for_malloc, time_for_plan, time_for_load, time_for_array_access, time_for_fft;
@@ -393,7 +424,7 @@ int main(int argc, const char **argv){
      off_y_1=(height1-size_y)/2;
      off_x_2=width2-size_x;
      off_y_2=(height2-size_y)/2;
-     invese_staple = 'r'; 
+     inverse_staple = 'r'; 
     default:
      off_x_1=0;
      off_x_2=0;
@@ -406,19 +437,62 @@ int main(int argc, const char **argv){
     save_image_region(size_x,size_y,off_x_1,off_y_1,image1,"/tmp/test1.png");
   memcpy(storage_buffer,fftw_output,sizeof(double complex)*size_x*(size_y/2+1));
 
-  rot_result_t rot_array[11];
-  for(i=0; i<11; i++){
+  /*Create 3 rotated images*/
+  rot_result_t rot_array[3]; /*Storage of rotated images*/
+  double phi=0.05;
+  for(i=0;i<3;i++){
     rectangle mystaple;
     make_rect(off_x_2,off_y_2,off_x_2+size_x,off_y_2+size_y,&mystaple);
-    fftw_rotated_image(-0.001+0.0002*i, &mystaple,'t', storage_buffer,image2, &rot_array[i]);
-    printf("phi: %f max: %f\n",rot_array[i].phi,rot_array[i].max);
-    char tmpfilename[60];
-    snprintf(tmpfilename,60,"/tmp/rotation2_%f.png",rot_array[i].phi); 
-    save_image_region(size_x,size_y,rot_array[i].staple.x1,rot_array[i].staple.y1,rot_array[i].image,tmpfilename);
-  } 
+    fftw_rotated_image(-phi+phi*i, /*Angle of rotation in radians*/
+                        &mystaple, /*Staple region*/
+                        inverse_staple, /*Where to place staple*/ 
+                        storage_buffer, /*FFT to convolve with rotated image*/
+                        image2, /*Source image*/
+                        &rot_array[i] /*Result*/
+                      );
+  }
+
+  double delta_phi=phi; //Angle between adjacent rotations
+  while(delta_phi>1.0/(double)width2){
+    if(debug_fft){
+      for(i=0;i<3;i++){
+        printf("Image %d: phi=%f max=%d\n",i+1,rot_array[i].phi,rot_array[i].max);
+      }
+    }   
+    if(!order_rotations(rot_array)){
+      warn("Middle element has a lowest match either rotation angle too\
+            small or algorithm not converging");
+      imlib_context_set_image(rot_array[1].image);
+      imlib_free_image();
+      break;
+    }
+    imlib_context_set_image(rot_array[1].image);
+    imlib_free_image();
+
+    rectangle mystaple;
+    make_rect(off_x_2,off_y_2,off_x_2+size_x,off_y_2+size_y,&mystaple);
+    fftw_rotated_image((rot_array[0].phi+rot_array[2].phi)/2.0,
+                        /*Angle of rotation in radians*/
+                        &mystaple, /*Staple region*/
+                        inverse_staple, /*Where to place staple*/ 
+                        storage_buffer, /*FFT to convolve with rotated image*/
+                        image2, /*Source image*/
+                        &rot_array[1] /*Result*/
+                      );
+    delta_phi=rot_array[1].phi-rot_array[0].phi;
+  }
+  int max=rot_array[0].max;
+  int best=0;
+  for(i=1;i<3;i++){
+    if(rot_array[i].max>max){
+      best=i; max = rot_array[i].max;
+    }
+  }
+  
 
   exit(0);
-  int imax=rot_array[5].imax;
+
+  int imax=rot_array[best].imax;
   int shift_x, shift_y;
   shift_x=imax%size_x;
   shift_y=(imax-shift_x)/size_x;
