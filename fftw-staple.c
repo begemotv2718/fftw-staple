@@ -9,61 +9,8 @@
 
 #define SIZE_X 100
 #define SIZE_Y 500
-#define MIN(x,y) ((x)<(y)?(x):(y))
-#define MAX(x,y) ((x)>(y)?(x):(y))
-
-
-typedef struct{
-  int x1,y1,x2,y2;
-} rectangle;
-
-void make_rect(int x1, int y1, int x2, int y2, rectangle *rect){
-  rect->x1=x1;
-  rect->y1=y1;
-  rect->x2=x2;
-  rect->y2=y2;
-}
-
-void inline copy_rect(rectangle *dest, rectangle *src){
-  dest->x1=src->x1;
-  dest->x2=src->x2;
-  dest->y1=src->y1;
-  dest->y2=src->y2;
-}
-
-void bounding_rectangle(rectangle *a, rectangle *b, rectangle *result){
-  result->x1=MIN(a->x1,b->x1);
-  result->x2=MAX(a->x2,b->x2);
-  result->y1=MIN(a->y1,b->y1);
-  result->y2=MAX(a->y2,b->y2);
-}
-
-void inline shift_rect(int shift_x, int shift_y, rectangle *rect){
-  rect->x1+=shift_x;rect->x2+=shift_x;
-  rect->y1+=shift_y;rect->y2+=shift_y;
-}
-
-int inline rect_width(rectangle rect){
-  return rect.x2-rect.x1;
-}
-
-int inline rect_height(rectangle rect){
-  return rect.y2-rect.y1;
-}
-
-void adjust_rectangle(rectangle *a, rectangle *b, rectangle *result){
-  /*Return bounding rectangle starting at (0,0). Modify rectangles a and b*/
-  bounding_rectangle(a,b,result);
-  int shift_x=-result->x1;
-  int shift_y=-result->y1;
-  shift_rect(shift_x,shift_y,result);
-  shift_rect(shift_x,shift_y,a);
-  shift_rect(shift_x,shift_y,b);
-}  
-
-void print_rectangle(rectangle *rect){
-  printf("(%d,%d)--(%d,%d)",rect->x1,rect->y1,rect->x2,rect->y2);
-}
+#include "rectangle.h"
+#include "parse_geometry.h"
 
 double inline convertrgb(DATA32 pix){
   unsigned char r,g,b;
@@ -297,43 +244,6 @@ int warn(char *message){
   fprintf(stderr, "%s\n",message);
 }
 
-int parse_staple( char **rest, char *result){
-  char *geometry;
-  geometry=*rest;
-  if(geometry[0]=='t' || geometry[0]=='b' || geometry[0]=='l' || geometry[0]=='r'){
-    *result=geometry[0];
-    (*rest)++;
-    return(1);
-  }
-  return(0);
-}
-int parse_int(char **rest, int *result){
-  *result=0;
-  if(!((**rest>='0')&&(**rest<='9')))
-    return(0);
-  while((**rest>='0')&&(**rest<='9')){
-    *result*=10;
-    *result+=**rest-'0';
-    (*rest)++;
-  }
-  return(1);
-}
-int parse_x( char **rest){
-  if(*rest[0]=='x'){
-    (*rest)++;
-    return(1);
-  }
-  return(0);
-}  
-int parse_geometry(char *geometry, int *size_x, int *size_y, char *staple){
-  char *rest;
-  rest=geometry;
-  return(
-  parse_staple(&rest,staple) &&
-  parse_int(&rest,size_x) &&
-  parse_x(&rest) &&
-  parse_int(&rest,size_y));
-}
 
 
 
@@ -458,7 +368,8 @@ int main(int argc, const char **argv){
                         image2, /*Source image*/
                         &rot_array[i] /*Result*/
                       );
-    printf("phi: %f max %f\n\n",rot_array[i].phi,rot_array[i].max);
+    if(debug_fft)
+      printf("phi: %f max %f\n\n",rot_array[i].phi,rot_array[i].max);
   }
 
   double delta_phi=phi; //Angle between adjacent rotations

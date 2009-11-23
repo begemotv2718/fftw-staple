@@ -1,4 +1,3 @@
-* Clean up the sources (move rectangle and parser code to separate files) etc.
 * Add configure, etc.
 * Tests for non-zero rotations and the other staple positions
 * Add possibility of avoiding rotation checks
