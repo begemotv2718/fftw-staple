@@ -1,0 +1,7 @@
+* Clean up the sources (move rectangle and parser code to separate files) etc.
+* Add configure, etc.
+* Tests for non-zero rotations and the other staple positions
+* Add possibility of avoiding rotation checks
+* Add specifying phi on the command line
+* More ambitious: allow assembly of more complex structures
+* Far future: add scaling support

@@ -43,6 +43,14 @@ void inline shift_rect(int shift_x, int shift_y, rectangle *rect){
   rect->y1+=shift_y;rect->y2+=shift_y;
 }
 
+int inline rect_width(rectangle rect){
+  return rect.x2-rect.x1;
+}
+
+int inline rect_height(rectangle rect){
+  return rect.y2-rect.y1;
+}
+
 void adjust_rectangle(rectangle *a, rectangle *b, rectangle *result){
   /*Return bounding rectangle starting at (0,0). Modify rectangles a and b*/
   bounding_rectangle(a,b,result);
@@ -332,7 +340,7 @@ int parse_geometry(char *geometry, int *size_x, int *size_y, char *staple){
 int main(int argc, const char **argv){
   int i;
   progname=argv[0];
-  int debug_fft=1;
+  int debug_fft=0;
   int do_rotation=0;
   Imlib_Image image1,image2;
   clock_t time_for_malloc, time_for_plan, time_for_load, time_for_array_access, time_for_fft;
@@ -439,7 +447,7 @@ int main(int argc, const char **argv){
 
   /*Create 3 rotated images*/
   rot_result_t rot_array[3]; /*Storage of rotated images*/
-  double phi=0.05;
+  double phi=0.1;
   for(i=0;i<3;i++){
     rectangle mystaple;
     make_rect(off_x_2,off_y_2,off_x_2+size_x,off_y_2+size_y,&mystaple);
@@ -462,8 +470,8 @@ int main(int argc, const char **argv){
       printf("\n");
     }   
     if(!order_rotations(rot_array)){
-      warn("Middle element has a lowest match either rotation angle too\
-            small or algorithm not converging");
+      warn("Middle element has a lowest max: either rotation angle too\
+            small or algorithm's not converging");
       imlib_context_set_image(rot_array[1].image);
       imlib_free_image();
       break;
@@ -492,8 +500,7 @@ int main(int argc, const char **argv){
   }
   
 
-  exit(0);
-
+  /*Find the shift of the staple rectangles relative to each other*/
   int imax=rot_array[best].imax;
   int shift_x, shift_y;
   shift_x=imax%size_x;
@@ -505,20 +512,38 @@ int main(int argc, const char **argv){
 
   if(debug_fft)
     printf("Shift x: %d Shift y: %d\n",shift_x,shift_y);
-  shift_y+=(off_y_1-off_y_2);
-  shift_x+=(off_x_1-off_x_2);
-  if(debug_fft)
-    printf("Shift x: %d Shift y: %d\n",shift_x,shift_y);
 
   rectangle rect_im1, rect_im2, bbox;
   make_rect(0,0,width1,height1,&rect_im1);
-  make_rect(0,0,width2,height2,&rect_im2);
-  shift_rect(shift_x,shift_y,&rect_im2);
+  imlib_context_set_image(rot_array[best].image);
+  make_rect(0,0,imlib_image_get_width(),imlib_image_get_height(),&rect_im2);
+
+  rectangle staple1, staple2;
+  make_rect(off_x_1,off_y_1,off_x_1+size_x,off_y_1+size_y,&staple1);
+  copy_rect(&staple2,&rot_array[best].staple);
+  if(debug_fft){
+    printf("staple1:"); print_rectangle(&staple1); printf("\n");
+    printf("staple2:"); print_rectangle(&staple2); printf("\n");
+  }
+
+  /*Shift the origin of coordinates  
+   * of rect_im1 and rect_im2 to the corner of 
+   * the corresponding staple
+   */
+  shift_rect(-staple1.x1,-staple1.y1,&rect_im1);
+  shift_rect(-staple1.x1,-staple1.y1,&staple1);
+  shift_rect(-staple2.x1,-staple2.y1,&rect_im2);
+  shift_rect(-staple2.x1,-staple2.y1,&staple2);
+
   if(debug_fft){
     printf("Before transform:\n");
+    printf("staple1:"); print_rectangle(&staple1); printf("\n");
+    printf("staple2:"); print_rectangle(&staple2); printf("\n");
     printf("Image 1: "); print_rectangle(&rect_im1); printf("\n");
     printf("Image 2: "); print_rectangle(&rect_im2); printf("\n");
   }
+  shift_rect(shift_x,shift_y,&staple2);
+  shift_rect(shift_x,shift_y,&rect_im2);
   adjust_rectangle(&rect_im1,&rect_im2,&bbox);
   if(debug_fft){
     printf("After transform:\n");
@@ -535,8 +560,10 @@ int main(int argc, const char **argv){
   imlib_image_set_format("png");
   imlib_context_set_color(255,255,255,255);
   imlib_image_fill_rectangle(0,0,bbox.x2,bbox.y2);
-  imlib_blend_image_onto_image(image1,1,0,0,width1,height1,rect_im1.x1,rect_im1.y1,width1,height1);
-  imlib_blend_image_onto_image(image2,1,0,0,width2,height2,rect_im2.x1,rect_im2.y1,width2,height2);
+  imlib_blend_image_onto_image(image1,1,0,0,rect_width(rect_im1),rect_height(rect_im1),
+                            rect_im1.x1,rect_im1.y1,rect_width(rect_im1),rect_height(rect_im1));
+  imlib_blend_image_onto_image(rot_array[best].image,1,0,0,rect_width(rect_im2),rect_height(rect_im2),
+                               rect_im2.x1,rect_im2.y1,rect_width(rect_im2),rect_height(rect_im2));
   imlib_save_image(file[2]);
   imlib_free_image();
 
@@ -544,21 +571,10 @@ int main(int argc, const char **argv){
   imlib_free_image();
   imlib_context_set_image(image2);
   imlib_free_image();
-
-  if(debug_fft){
-    DATA32* outbuffer=fftw_malloc(sizeof(DATA32)*size_x*size_y);
-    for(i=0; i<size_x*size_y; i++)
-      outbuffer[i]=convertfromdouble(fabs(fftw_reverse_result[i]));
-
-    Imlib_Image out_image;
-    out_image=imlib_create_image_using_data(size_x, size_y,outbuffer);
-    imlib_context_set_image(out_image);
-    imlib_image_set_format("png");
-    imlib_save_image("/tmp/tmp_fft.png"); 
+  for(i=0; i<3; i++){
+    imlib_context_set_image(rot_array[i].image);
     imlib_free_image();
-    fftw_free(outbuffer);
   }
-
 
 }  
 
