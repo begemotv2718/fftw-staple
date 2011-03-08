@@ -7,5 +7,7 @@ the other and blend them together. Currently the overlap region should be in
 exactly the same orientation on the both images, which makes this program only
 of limited use to stitch panoramas and scans of the pages that do not fully fit
 on the scanner bed (because skewing of one image w.r.t the other is very
-likely). The support for the second task, however, is planned in the nearest
-future.  
+likely). 
+
+Skew correction is implemented  in the other branch, however, this is without
+ clean interface.
